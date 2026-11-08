@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صالون صاحب السعادة - نظام الإدارة والطابور الفوري</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Firebase Configuration (Provided by user)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjryAh_B11hFnYE9e-ux_FQ2IFo6bkzjY",
+            authDomain: "saadabarber.firebaseapp.com",
+            projectId: "saadabarber",
+            storageBucket: "saadabarber.firebasestorage.app",
+            messagingSenderId: "29595137155",
+            appId: "1:29595137155:web:3c8c8d75a05d254d6d97b6",
+            measurementId: "G-WX60BH0R6L"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        window.db = db;
+        window.FB_SDK = { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot };
+        
+        // Trigger initial app load after Firebase is ready
+        if(window.initApp) window.initApp();
+    </script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen flex flex-col justify-between">
+
+    <!-- Header -->
+    <header class="bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-amber-500 text-zinc-950 p-2.5 rounded-xl font-bold text-xl shadow-lg shadow-amber-500/20">
+                    <i class="fa-solid fa-scissors"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-amber-400">صالون صاحب السعادة</h1>
+                    <p class="text-xs text-zinc-400">الطابور الفوري، الحجوزات، والمنتجات</p>
+                </div>
+            </div>
+            <div>
+                <button onclick="toggleView()" id="viewToggleBtn" class="bg-zinc-800 hover:bg-zinc-700 text-amber-400 px-4 py-2 rounded-xl text-sm font-semibold border border-amber-500/30 transition shadow">
+                    <i class="fa-solid fa-lock-open ml-2"></i> لوحة تحكم الحلاقين
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Top Advertisement Banner (Monetag) -->
+    <div class="max-w-4xl mx-auto w-full px-4 mt-4">
+        <div class="bg-zinc-900 border border-dashed border-zinc-700 rounded-xl p-3 text-center text-xs text-zinc-500 overflow-hidden">
+            <span class="block mb-1 text-zinc-600"><i class="fa-solid fa-ad ml-1"></i> إعلان ممول</span>
+            <script>(function(s){s.dataset.zone='12214473',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="max-w-4xl mx-auto w-full p-4 flex-grow space-y-6">
+
+        <!-- ================= CUSTOMER VIEW ================= -->
+        <div id="customerView" class="space-y-6">
+            
+            <!-- Live Queue Status Box -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-2 h-full bg-amber-500"></div>
+                <h2 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-users-viewfinder"></i> حالة الطابور الفوري الآن
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                        <span class="text-zinc-400 text-sm block">الزبون الحالي على الكرسي</span>
+                        <span id="currentCustomerDisplay" class="text-base font-bold text-emerald-400 mt-1 block">لا يوجد حالياً</span>
+                    </div>
+                    <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                        <span class="text-zinc-400 text-sm block">عدد المنتظرين</span>
+                        <span id="waitingCountDisplay" class="text-xl font-bold text-amber-400 mt-1 block">0</span>
+                    </div>
+                    <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                        <span class="text-zinc-400 text-sm block">الحلاقون المتواجدون الآن</span>
+                        <span id="activeBarbersDisplay" class="text-sm font-bold text-sky-400 mt-1 block">جاري التحقق...</span>
+                    </div>
+                </div>
+
+                <!-- Live Queue List Preview -->
+                <div class="mt-6">
+                    <h3 class="text-sm font-semibold text-zinc-400 mb-3">قائمة الانتظار الحالية:</h3>
+                    <div id="liveQueueList" class="space-y-2 max-h-48 overflow-y-auto">
+                        <p class="text-zinc-500 text-center py-2 text-sm">جاري تحميل الطابور...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- In-App Notification Alert Box -->
+            <div id="inAppNotificationBox" class="hidden bg-amber-500/10 border border-amber-500/50 rounded-2xl p-4 text-amber-300 text-center text-sm font-bold animate-pulse">
+                <i class="fa-solid fa-bell ml-2"></i> تنبيه هام: يرجى الاستعداد، لقد اقترب دورك ولم يتبق سوى شخصين فقط!
+            </div>
+
+            <!-- Booking Form Section -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
+                <h2 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-plus"></i> احجز دورك أو موعدك الآن
+                </h2>
+                <form id="bookingForm" onsubmit="handleBooking(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-1">اسمك الكريم</label>
+                            <input type="text" id="custName" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500" placeholder="اكتب اسمك هنا...">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-1">رقم الهاتف</label>
+                            <input type="tel" id="custPhone" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500" placeholder="01xxxxxxxxx">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-1">اختر الحلاق المتاح</label>
+                            <select id="selectedBarber" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500">
+                                <option value="">اختر الحلاق المتواجد بالمحل...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-1">الخدمة المطلوبة</label>
+                            <select id="selectedService" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500">
+                                <!-- Loaded dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold py-3 rounded-xl transition shadow-lg cursor-pointer">
+                        تأكيد وإرسال الحجز للطابور الفوري
+                    </button>
+                </form>
+            </div>
+
+            <!-- Products Store Section for Customers -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
+                <h2 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-store"></i> متجر منتجات صالون صاحب السعادة
+                </h2>
+                <div id="customerProductsGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <p class="text-zinc-500 col-span-full text-center text-sm py-4">جاري تحميل المنتجات...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= ADMIN / BARBER VIEW ================= -->
+        <div id="adminView" class="hidden space-y-6">
+            
+            <!-- Attendance Check-in Box -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl border-amber-500/50">
+                <h2 class="text-xl font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-user-check"></i> لوحة تسجيل الحضور (فتح الوردية)
+                </h2>
+                <p class="text-xs text-zinc-400 mb-4">اضغط لتسجيل حضورك بالمحل لكي تظهر أسماؤك للزبائن في قائمة الحجز المتاحة:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
+                        <div>
+                            <span class="font-bold text-zinc-100 block">الشناوي</span>
+                            <span id="shennawyStatus" class="text-xs text-rose-400">غير مسجل حضور (غائب)</span>
+                        </div>
+                        <button onclick="toggleAttendance('الشناوي')" id="shennawyBtn" class="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer">
+                            تسجيل حضور
+                        </button>
+                    </div>
+                    <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
+                        <div>
+                            <span class="font-bold text-zinc-100 block">عبدالواحد</span>
+                            <span id="abdelwahedStatus" class="text-xs text-rose-400">غير مسجل حضور (غائب)</span>
+                        </div>
+                        <button onclick="toggleAttendance('عبدالواحد')" id="abdelwahedBtn" class="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer">
+                            تسجيل حضور
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queue Management Box -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl border-amber-500/50">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-amber-400 flex items-center gap-2">
+                        <i class="fa-solid fa-gauge-high"></i> إدارة الطابور المباشر
+                    </h2>
+                </div>
+                <h3 class="text-sm font-semibold text-zinc-400 mb-3">طلبات الطابور الحالية:</h3>
+                <div id="adminQueueList" class="space-y-3">
+                    <p class="text-zinc-500 text-center py-4 text-sm">جاري تحميل الطابور...</p>
+                </div>
+            </div>
+
+            <!-- Services Management Box (Custom services without forced prices) -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl border-amber-500/50">
+                <h2 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check"></i> إدارة الخدمات (إضافة خدمات جديدة بلا سعر إجباري)
+                </h2>
+                <form id="serviceForm" onsubmit="handleSaveService(event)" class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-zinc-400 mb-1">اسم الخدمة</label>
+                            <input type="text" id="servName" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-amber-500" placeholder="مثال: جلسة بخار، بروتين">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-zinc-400 mb-1">السعر (اختياري تماماً)</label>
+                            <input type="text" id="servPrice" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-amber-500" placeholder="مثال: 50 ج.م أو اتركه فارغاً">
+                        </div>
+                    </div>
+                    <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-5 py-2 rounded-lg text-sm transition cursor-pointer">
+                        <i class="fa-solid fa-plus ml-1"></i> إضافة الخدمة
+                    </button>
+                </form>
+                <h3 class="text-sm font-semibold text-zinc-400 mb-3">الخدمات المتاحة حالياً:</h3>
+                <div id="adminServicesList" class="space-y-2">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Products Management Box -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl border-amber-500/50">
+                <h2 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-boxes-stacked"></i> إدارة متجر المنتجات (صورة، وصف، سعر)
+                </h2>
+                <form id="productForm" onsubmit="handleSaveProduct(event)" class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4 mb-6">
+                    <input type="hidden" id="editingProductId">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs text-zinc-400 mb-1">اسم المنتج</label>
+                            <input type="text" id="prodName" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-amber-500" placeholder="مثال: زيت لحية">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-zinc-400 mb-1">السعر (ج.م)</label>
+                            <input type="number" id="prodPrice" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-amber-500" placeholder="100">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-zinc-400 mb-1">صورة المنتج</label>
+                            <input type="file" id="prodImage" accept="image/*" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-amber-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-zinc-400 mb-1">وصف المنتج</label>
+                        <textarea id="prodDesc" rows="2" required class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-amber-500" placeholder="وصف موجز للمنتج..."></textarea>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-5 py-2 rounded-lg text-sm transition cursor-pointer">
+                            <i class="fa-solid fa-save ml-1"></i> حفظ المنتج
+                        </button>
+                        <button type="button" onclick="resetProductForm()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg text-sm transition">
+                            إلغاء التعديل
+                        </button>
+                    </div>
+                </form>
+                <h3 class="text-sm font-semibold text-zinc-400 mb-3">المنتجات المعروضة:</h3>
+                <div id="adminProductsList" class="space-y-3">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Advertisement Banner (Monetag) -->
+    <div class="max-w-4xl mx-auto w-full px-4 mb-4">
+        <div class="bg-zinc-900 border border-dashed border-zinc-700 rounded-xl p-3 text-center text-xs text-zinc-500 overflow-hidden">
+            <span class="block mb-1 text-zinc-600"><i class="fa-solid fa-ad ml-1"></i> إعلان ممول</span>
+            <script>(function(s){s.dataset.zone='12214473',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-zinc-900 border-t border-zinc-800 py-4 text-center text-xs text-zinc-500">
+        جميع الحقوق محفوظة © لصالون صاحب السعادة 2026
+    </footer>
+
+    <!-- App Logic Script -->
+    <script>
+        let isAdminView = false;
+        let queueData = [];
+        let servicesData = [
+            { id: '1', name: 'قص شعر', price: '50 ج.م' },
+            { id: '2', name: 'حلاقة ذقن', price: '30 ج.م' }
+        ];
+        let productsData = [];
+        let attendanceData = { 'الشناوي': false, 'عبدالواحد': false };
+
+        window.initApp = function() {
+            const { collection, onSnapshot } = window.FB_SDK;
+            
+            // Realtime Queue listener
+            onSnapshot(collection(window.db, "queue"), (snapshot) => {
+                queueData = [];
+                snapshot.forEach((docSnap) => {
+                    queueData.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                renderCustomerQueue();
+                if(isAdminView) renderAdminQueue();
+            });
+
+            // Realtime Services listener
+            onSnapshot(collection(window.db, "services"), (snapshot) => {
+                if(!snapshot.empty) {
+                    servicesData = [];
+                    snapshot.forEach((docSnap) => {
+                        servicesData.push({ id: docSnap.id, ...docSnap.data() });
+                    });
+                }
+                renderServicesDropdown();
+                if(isAdminView) renderAdminServices();
+            });
+
+            // Realtime Products listener
+            onSnapshot(collection(window.db, "products"), (snapshot) => {
+                productsData = [];
+                snapshot.forEach((docSnap) => {
+                    productsData.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                renderCustomerProducts();
+                if(isAdminView) renderAdminProducts();
+            });
+
+            // Realtime Attendance listener
+            onSnapshot(collection(window.db, "attendance"), (snapshot) => {
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    if(data.barber) {
+                        attendanceData[data.barber] = data.present;
+                    }
+                });
+                updateAttendanceUI();
+                renderBarbersDropdown();
+            });
+        };
+
+        function toggleView() {
+            if (!isAdminView) {
+                const password = prompt('أدخل كلمة المرور لفتح لوحة التحكم:');
+                if (password === null) return;
+                if (password !== '2003') {
+                    alert('كلمة المرور غير صحيحة!');
+                    return;
+                }
+            }
+
+            isAdminView = !isAdminView;
+            const custView = document.getElementById('customerView');
+            const admView = document.getElementById('adminView');
+            const btn = document.getElementById('viewToggleBtn');
+
+            if (isAdminView) {
+                custView.classList.add('hidden');
+                admView.classList.remove('hidden');
+                btn.innerHTML = `<i class="fa-solid fa-user ml-2"></i> عودة لوحة الزبائن`;
+                btn.className = "bg-amber-500 text-zinc-950 px-4 py-2 rounded-lg text-sm font-semibold transition shadow";
+                renderAdminQueue();
+                renderAdminServices();
+                renderAdminProducts();
+                updateAttendanceUI();
+            } else {
+                custView.classList.remove('hidden');
+                admView.classList.add('hidden');
+                btn.innerHTML = `<i class="fa-solid fa-lock-open ml-2"></i> لوحة تحكم الحلاقين`;
+                btn.className = "bg-zinc-800 hover:bg-zinc-700 text-amber-400 px-4 py-2 rounded-lg text-sm font-semibold border border-amber-500/30 transition shadow";
+                renderCustomerQueue();
+                renderCustomerProducts();
+                renderBarbersDropdown();
+            }
+        }
+
+        // --- Attendance Functions ---
+        async function toggleAttendance(barberName) {
+            const { collection, getDocs, addDoc, updateDoc, doc } = window.FB_SDK;
+            const currentStatus = attendanceData[barberName] || false;
+            const newStatus = !currentStatus;
+
+            const querySnapshot = await getDocs(collection(window.db, "attendance"));
+            let foundDocId = null;
+            querySnapshot.forEach((d) => {
+                if(d.data().barber === barberName) foundDocId = d.id;
+            });
+
+            if(foundDocId) {
+                await updateDoc(doc(window.db, "attendance", foundDocId), { present: newStatus });
+            } else {
+                await addDoc(collection(window.db, "attendance"), { barber: barberName, present: newStatus });
+            }
+            attendanceData[barberName] = newStatus;
+            updateAttendanceUI();
+            renderBarbersDropdown();
+        }
+
+        function updateAttendanceUI() {
+            const shennawyPresent = attendanceData['الشناوي'] || false;
+            const abdelwahedPresent = attendanceData['عبدالواحد'] || false;
+
+            document.getElementById('shennawyStatus').textContent = shennawyPresent ? 'متواجد بالمحل (متاح)' : 'غير مسجل حضور (غائب)';
+            document.getElementById('shennawyStatus').className = shennawyPresent ? 'text-xs text-emerald-400' : 'text-xs text-rose-400';
+            document.getElementById('shennawyBtn').textContent = shennawyPresent ? 'تسجيل انصراف' : 'تسجيل حضور';
+            document.getElementById('shennawyBtn').className = shennawyPresent ? 'bg-rose-600 hover:bg-rose-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer' : 'bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer';
+
+            document.getElementById('abdelwahedStatus').textContent = abdelwahedPresent ? 'متواجد بالمحل (متاح)' : 'غير مسجل حضور (غائب)';
+            document.getElementById('abdelwahedStatus').className = abdelwahedPresent ? 'text-xs text-emerald-400' : 'text-xs text-rose-400';
+            document.getElementById('abdelwahedBtn').textContent = abdelwahedPresent ? 'تسجيل انصراف' : 'تسجيل حضور';
+            document.getElementById('abdelwahedBtn').className = abdelwahedPresent ? 'bg-rose-600 hover:bg-rose-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer' : 'bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer';
+
+            const activeBarbers = [];
+            if(shennawyPresent) activeBarbers.push('الشناوي');
+            if(abdelwahedPresent) activeBarbers.push('عبدالواحد');
+
+            const activeDisplay = document.getElementById('activeBarbersDisplay');
+            if(activeDisplay) {
+                activeDisplay.textContent = activeBarbers.length > 0 ? activeBarbers.join(' & ') : 'لا يوجد حلاقين متاحين حالياً (المحل مغلق)';
+            }
+        }
+
+        function renderBarbersDropdown() {
+            const select = document.getElementById('selectedBarber');
+            if(!select) return;
+            select.innerHTML = '<option value="">اختر الحلاق المتواجد بالمحل...</option>';
+            if(attendanceData['الشناوي']) {
+                select.innerHTML += `<option value="الشناوي">الشناوي</option>`;
+            }
+            if(attendanceData['عبدالواحد']) {
+                select.innerHTML += `<option value="عبدالواحد">عبدالواحد</option>`;
+            }
+        }
+
+        // --- Queue Functions ---
+        async function handleBooking(e) {
+            e.preventDefault();
+            const name = document.getElementById('custName').value;
+            const phone = document.getElementById('custPhone').value;
+            const barber = document.getElementById('selectedBarber').value;
+            const service = document.getElementById('selectedService').value;
+
+            if(!barber) {
+                alert('عذراً، لا يوجد حلاق مسجل حضور الآن أو لم تقتر إختيار حلاق متاح!');
+                return;
+            }
+
+            const isFirst = queueData.length === 0;
+            const newBooking = {
+                name,
+                phone,
+                barber,
+                service,
+                status: isFirst ? 'active' : 'waiting',
+                createdAt: Date.now()
+            };
+
+            await window.FB_SDK.addDoc(window.FB_SDK.collection(window.db, "queue"), newBooking);
+            document.getElementById('bookingForm').reset();
+            alert('تم تسجيل حجزك بنجاح وأُضيف للطابور الفوري في صالون صاحب السعادة!');
+        }
+
+        async function markAsDone(id) {
+            const { doc, updateDoc, deleteDoc } = window.FB_SDK;
+            await deleteDoc(doc(window.db, "queue", id));
+            
+            // Make next waiting person active
+            const waitingItems = queueData.filter(q => q.status === 'waiting');
+            if(waitingItems.length > 0) {
+                waitingItems.sort((a, b) => a.createdAt - b.createdAt);
+                await updateDoc(doc(window.db, "queue", waitingItems[0].id), { status: 'active' });
+            }
+        }
+
+        async function sendAdminNotification(name) {
+            alert(`تم إرسال إشعار تأكيد خاص إلى الزبون (${name}): "يستعد الصالون لاستقبالك الآن، برجاء الحضور!"`);
+        }
+
+        function renderCustomerQueue() {
+            const listEl = document.getElementById('liveQueueList');
+            const currentDisplay = document.getElementById('currentCustomerDisplay');
+            const waitingCountDisplay = document.getElementById('waitingCountDisplay');
+            const notificationBox = document.getElementById('inAppNotificationBox');
+
+            const activeCustomer = queueData.find(q => q.status === 'active');
+            const waitingList = queueData.filter(q => q.status === 'waiting');
+
+            currentDisplay.textContent = activeCustomer ? `${activeCustomer.name} (مع: ${activeCustomer.barber})` : 'لا يوجد حالياً';
+            waitingCountDisplay.textContent = waitingList.length;
+
+            // In-app notification if 2 people left
+            if(waitingList.length === 2) {
+                notificationBox.classList.remove('hidden');
+            } else {
+                notificationBox.classList.add('hidden');
+            }
+
+            if (queueData.length === 0) {
+                listEl.innerHTML = `<p class="text-zinc-500 text-center py-2 text-sm">الطابور فارغ حالياً، كن أول الحاضرين!</p>`;
+                return;
+            }
+
+            listEl.innerHTML = queueData.map((item, index) => `
+                <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center text-sm">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-zinc-800 text-amber-400 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">${index + 1}</span>
+                        <div>
+                            <span class="font-semibold text-zinc-200">${item.name}</span>
+                            <span class="text-xs text-zinc-400 block">الحلاق: ${item.barber} | الخدمة: ${item.service}</span>
+                        </div>
+                    </div>
+                    <div>
+                        ${item.status === 'active' 
+                            ? '<span class="text-emerald-400 text-xs flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20"><i class="fa-solid fa-clock"></i> جاري الحلاقة...</span>' 
+                            : '<span class="text-amber-400 text-xs flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20"><i class="fa-solid fa-clock"></i> في الانتظار</span>'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAdminQueue() {
+            const adminListEl = document.getElementById('adminQueueList');
+            if (queueData.length === 0) {
+                adminListEl.innerHTML = `<p class="text-zinc-500 text-center py-4 text-sm">لا توجد حجوزات في الطابور حالياً.</p>`;
+                return;
+            }
+            adminListEl.innerHTML = queueData.map((item) => `
+                <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-zinc-100">${item.name}</span>
+                            <span class="text-xs px-2 py-0.5 rounded ${item.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">
+                                ${item.status === 'active' ? 'على الكرسي الآن' : 'منتظر'}
+                            </span>
+                        </div>
+                        <p class="text-xs text-zinc-400 mt-1">الهاتف: ${item.phone} | الحلاق: ${item.barber} | الخدمة: ${item.service}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="sendAdminNotification('${item.name}')" class="bg-sky-600 hover:bg-sky-500 text-zinc-950 font-bold px-3 py-2 rounded-xl text-xs transition cursor-pointer shadow">
+                            <i class="fa-solid fa-bell"></i> إشعار تأكيد
+                        </button>
+                        <button onclick="markAsDone('${item.id}')" class="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer shadow">
+                            <i class="fa-solid fa-check"></i> تم (Done)
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- Services Functions (Without forced prices) ---
+        async function handleSaveService(e) {
+            e.preventDefault();
+            const name = document.getElementById('servName').value;
+            const price = document.getElementById('servPrice').value || 'سعر خاص';
+            
+            await window.FB_SDK.addDoc(window.FB_SDK.collection(window.db, "services"), { name, price });
+            document.getElementById('serviceForm').reset();
+            alert('تم إضافة الخدمة بنجاح!');
+        }
+
+        async function deleteService(id) {
+            if(confirm('هل تريد حذف هذه الخدمة؟')) {
+                await window.FB_SDK.deleteDoc(window.FB_SDK.doc(window.db, "services", id));
+            }
+        }
+
+        function renderServicesDropdown() {
+            const select = document.getElementById('selectedService');
+            if(!select) return;
+            select.innerHTML = '';
+            servicesData.forEach(s => {
+                select.innerHTML += `<option value="${s.name} (${s.price})">${s.name} - ${s.price}</option>`;
+            });
+        }
+
+        function renderAdminServices() {
+            const listEl = document.getElementById('adminServicesList');
+            if(servicesData.length === 0) {
+                listEl.innerHTML = `<p class="text-zinc-500 text-sm">لا توجد خدمات مضافة.</p>`;
+                return;
+            }
+            listEl.innerHTML = servicesData.map(s => `
+                <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center text-sm">
+                    <div>
+                        <span class="font-bold text-zinc-100">${s.name}</span>
+                        <span class="text-xs text-amber-400 mr-2">${s.price}</span>
+                    </div>
+                    <button onclick="deleteService('${s.id}')" class="bg-rose-600 hover:bg-rose-500 text-zinc-950 px-3 py-1 rounded-lg text-xs font-bold transition">
+                        حذف
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // --- Products Store Functions ---
+        async function handleSaveProduct(e) {
+            e.preventDefault();
+            const id = document.getElementById('editingProductId').value;
+            const name = document.getElementById('prodName').value;
+            const price = parseFloat(document.getElementById('prodPrice').value);
+            const imageFile = document.getElementById('prodImage').files[0];
+            const desc = document.getElementById('prodDesc').value;
+            const existingProduct = id ? productsData.find(product => product.id === id) : null;
+
+            if (!imageFile && !existingProduct) {
+                alert('يرجى اختيار صورة للمنتج.');
+                return;
+            }
+
+            try {
+                let image = existingProduct ? existingProduct.image : '';
+                if (imageFile) {
+                    if (!imageFile.type.startsWith('image/')) {
+                        alert('يرجى اختيار ملف صورة صالح.');
+                        return;
+                    }
+
+                    image = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => reject(new Error('تعذرت قراءة ملف الصورة.'));
+                        reader.readAsDataURL(imageFile);
+                    });
+                }
+
+                const productData = { name, price, image, desc };
+                if (id) {
+                    await window.FB_SDK.updateDoc(window.FB_SDK.doc(window.db, "products", id), productData);
+                } else {
+                    await window.FB_SDK.addDoc(window.FB_SDK.collection(window.db, "products"), productData);
+                }
+
+                resetProductForm();
+                alert('تم حفظ المنتج بنجاح في قاعدة البيانات السحابية!');
+            } catch (error) {
+                console.error('تعذر حفظ المنتج:', error);
+                alert('تعذر حفظ المنتج. يرجى التحقق من الصورة والاتصال بقاعدة البيانات والمحاولة مجدداً.');
+            }
+        }
+
+        function editProduct(id) {
+            const product = productsData.find(p => p.id === id);
+            if (product) {
+                document.getElementById('editingProductId').value = product.id;
+                document.getElementById('prodName').value = product.name;
+                document.getElementById('prodPrice').value = product.price;
+                document.getElementById('prodDesc').value = product.desc;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        async function deleteProduct(id) {
+            if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
+                await window.FB_SDK.deleteDoc(window.FB_SDK.doc(window.db, "products", id));
+            }
+        }
+
+        function resetProductForm() {
+            document.getElementById('productForm').reset();
+            document.getElementById('editingProductId').value = '';
+        }
+
+        function renderCustomerProducts() {
+            const gridEl = document.getElementById('customerProductsGrid');
+            if (productsData.length === 0) {
+                gridEl.innerHTML = `<p class="text-zinc-500 col-span-full text-center text-sm py-4">لا توجد منتجات معروضة في المتجر حالياً.</p>`;
+                return;
+            }
+            gridEl.innerHTML = productsData.map(p => `
+                <div class="bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex flex-col justify-between">
+                    <img src="${p.image}" alt="${p.name}" class="w-full h-40 object-cover" onerror="this.src='https://via.placeholder.com/300?text=Barber+Product'">
+                    <div class="p-4 flex flex-col flex-grow justify-between">
+                        <div>
+                            <h3 class="font-bold text-zinc-100 text-sm">${p.name}</h3>
+                            <p class="text-xs text-zinc-400 mt-1">${p.desc}</p>
+                        </div>
+                        <div class="mt-4 flex justify-between items-center">
+                            <span class="text-amber-400 font-bold text-sm">${p.price} ج.م</span>
+                            <span class="bg-zinc-800 text-zinc-300 text-xs px-2.5 py-1 rounded-lg">متوفر بالصالون</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAdminProducts() {
+            const listEl = document.getElementById('adminProductsList');
+            if (productsData.length === 0) {
+                listEl.innerHTML = `<p class="text-zinc-500 text-center py-4 text-sm">لا توجد منتجات مضافة.</p>`;
+                return;
+            }
+            listEl.innerHTML = productsData.map(p => `
+                <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex items-center justify-between gap-4 text-sm">
+                    <div class="flex items-center gap-3">
+                        <img src="${p.image}" alt="" class="w-12 h-12 rounded-lg object-cover" onerror="this.src='https://via.placeholder.com/50'">
+                        <div>
+                            <span class="font-bold text-zinc-100">${p.name}</span>
+                            <span class="text-xs text-amber-400 block">${p.price} ج.م</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="editProduct('${p.id}')" class="bg-sky-600 hover:bg-sky-500 text-zinc-950 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                            <i class="fa-solid fa-pen"></i> تعديل
+                        </button>
+                        <button onclick="deleteProduct('${p.id}')" class="bg-rose-600 hover:bg-rose-500 text-zinc-950 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
